@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"log"
 	"net/http"
 
-	"github.com/google/uuid"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"github.com/vedanthnyk25/sentinel/internal/platform/broker"
@@ -34,6 +34,9 @@ func main() {
 		log.Fatalf("Failed to ping DB: %v", err)
 	}
 
+	db.SetMaxOpenConns(50)
+	db.SetMaxIdleConns(50)
+
 	// Initialize Redis client
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
@@ -59,50 +62,16 @@ func main() {
 	janitor := worker.NewJanitor(queries, db, rdb, rmq.Chan)
 	janitor.Start()
 
-	http.HandleFunc("/reserve", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	r := chi.NewRouter()
 
-		idempotencyKey := r.Header.Get("Idempotency-Key")
-		if idempotencyKey == "" {
-			http.Error(w, "Missing Idempotency-Key header", http.StatusBadRequest)
-			return
-		}
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 
-		var req ReserveRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		userId, err := uuid.Parse(req.UserID)
-		if err != nil {
-			http.Error(w, "Invalid user_id", http.StatusBadRequest)
-			return
-		}
-
-		eventId, err := uuid.Parse(req.EventID)
-		if err != nil {
-			http.Error(w, "Invalid event_id", http.StatusBadRequest)
-			return
-		}
-
-		res, err := reservationService.ReserveTicket(r.Context(), userId, eventId, idempotencyKey)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			//http.Error(w, "Failed to reserve ticket", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(res)
-	})
+	resHandler := reservation.NewHandler(reservationService)
+	resHandler.RegisterRoutes(r)
 
 	log.Println("Sentinel API running on http://localhost:8080")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":8080", r); err != nil {
 		log.Fatalf("Server crashed: %v", err)
 	}
 }
