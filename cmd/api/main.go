@@ -10,16 +10,13 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
+	"github.com/vedanthnyk25/sentinel/internal/auth"
+	mw "github.com/vedanthnyk25/sentinel/internal/middleware"
 	"github.com/vedanthnyk25/sentinel/internal/platform/broker"
 	"github.com/vedanthnyk25/sentinel/internal/platform/database"
 	"github.com/vedanthnyk25/sentinel/internal/reservation"
 	"github.com/vedanthnyk25/sentinel/internal/worker"
 )
-
-type ReserveRequest struct {
-	UserID  string `json:"user_id"`
-	EventID string `json:"event_id"`
-}
 
 func main() {
 	// Initialize database connection
@@ -56,19 +53,32 @@ func main() {
 
 	// Initialize services
 	queries := database.New(db)
+
 	reservationService := reservation.NewService(queries, db, rdb, rmq.Chan)
 
-	// Initialize janitor
-	janitor := worker.NewJanitor(queries, db, rdb, rmq.Chan)
-	janitor.Start()
+	JWT_SECRET := "supersecret"
+	authService := auth.NewService(queries, JWT_SECRET)
+
+	authHandler := auth.NewHandler(authService)
 
 	r := chi.NewRouter()
 
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
+	// Initialize janitor
+	janitor := worker.NewJanitor(queries, db, rdb, rmq.Chan)
+	janitor.Start()
+
+	r.Route("/auth", func(r chi.Router) {
+		authHandler.RegisterRoutes(r)
+	})
+
 	resHandler := reservation.NewHandler(reservationService)
-	resHandler.RegisterRoutes(r)
+	r.Group(func(r chi.Router) {
+		r.Use(mw.RequireAuth(JWT_SECRET))
+		resHandler.RegisterRoutes(r)
+	})
 
 	log.Println("Sentinel API running on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {

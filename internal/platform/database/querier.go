@@ -13,9 +13,13 @@ import (
 type Querier interface {
 	// Creates a new reservation for a user and event.
 	CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error)
+	// Creates a new user with the given email and password hash.
+	CreateUser(ctx context.Context, arg CreateUserParams) error
 	// Retrieves the current inventory for a given event.
 	GetInventory(ctx context.Context, eventID uuid.NullUUID) (Inventory, error)
 	GetReservationStatus(ctx context.Context, id uuid.UUID) (ReservationStatus, error)
+	// Retrieves a user by their email address.
+	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
 	// Inserts a new idempotency key for a user.
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (uuid.UUID, error)
 	MarkReservationExpired(ctx context.Context, id uuid.UUID) (int64, error)

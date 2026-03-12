@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	mw "github.com/vedanthnyk25/sentinel/internal/middleware"
 )
 
 type ReserveRequest struct {
@@ -39,8 +40,8 @@ func (h *Handler) handleReserveTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := uuid.Parse(req.UserID)
-	if err != nil {
+	userID, ok := r.Context().Value(mw.UserIDKey).(uuid.UUID)
+	if !ok {
 		http.Error(w, "Invalid user_id", http.StatusBadRequest)
 		return
 	}
