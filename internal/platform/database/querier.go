@@ -15,6 +15,10 @@ type Querier interface {
 	CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error)
 	// Creates a new user with the given email and password hash.
 	CreateUser(ctx context.Context, arg CreateUserParams) error
+	// Retrieves a list of all events in the catalog.
+	GetAllEvents(ctx context.Context) ([]GetAllEventsRow, error)
+	// Retrieves a single event by its ID.
+	GetEventByID(ctx context.Context, id uuid.UUID) (GetEventByIDRow, error)
 	// Retrieves the current inventory for a given event.
 	GetInventory(ctx context.Context, eventID uuid.NullUUID) (Inventory, error)
 	GetReservationStatus(ctx context.Context, id uuid.UUID) (ReservationStatus, error)

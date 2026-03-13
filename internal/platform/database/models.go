@@ -105,6 +105,8 @@ type Event struct {
 	ID          uuid.UUID      `json:"id"`
 	Name        string         `json:"name"`
 	Description sql.NullString `json:"description"`
+	Date        time.Time      `json:"date"`
+	Location    string         `json:"location"`
 	Price       string         `json:"price"`
 	StartTime   time.Time      `json:"start_time"`
 	Status      EventStatus    `json:"status"`

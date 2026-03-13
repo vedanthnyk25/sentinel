@@ -11,6 +11,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"github.com/vedanthnyk25/sentinel/internal/auth"
+	"github.com/vedanthnyk25/sentinel/internal/catalog"
 	mw "github.com/vedanthnyk25/sentinel/internal/middleware"
 	"github.com/vedanthnyk25/sentinel/internal/platform/broker"
 	"github.com/vedanthnyk25/sentinel/internal/platform/database"
@@ -19,22 +20,28 @@ import (
 )
 
 func main() {
-	// Initialize database connection
+	// =========================================================================
+	// Configuration & Secrets
+	// =========================================================================
 	dsn := "postgres://root:secretpassword@localhost:5432/sentinel?sslmode=disable"
+	JWT_SECRET := "supersecret"
+
+	// =========================================================================
+	// Infrastructure Layer (Databases, Caches, Brokers)
+	// =========================================================================
+	// PostgreSQL
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		log.Fatalf("Failed to open DB connection: %v", err)
 	}
 	defer db.Close()
-
 	if err := db.Ping(); err != nil {
 		log.Fatalf("Failed to ping DB: %v", err)
 	}
-
 	db.SetMaxOpenConns(50)
 	db.SetMaxIdleConns(50)
 
-	// Initialize Redis client
+	// Redis
 	rdb := redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
@@ -43,7 +50,7 @@ func main() {
 	}
 	defer rdb.Close()
 
-	// Initialize RabbitMQ connection
+	// RabbitMQ
 	rmq, err := broker.NewRabbitMQ("amqp://guest:guest@localhost:5672/")
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
@@ -51,35 +58,55 @@ func main() {
 	defer rmq.Conn.Close()
 	defer rmq.Chan.Close()
 
-	// Initialize services
+	// =========================================================================
+	//  Data Access Layer
+	// =========================================================================
 	queries := database.New(db)
 
+	// =========================================================================
+	// Service Layer (Business Logic)
+	// =========================================================================
+	authService := auth.NewService(queries, JWT_SECRET)
+	catalogService := catalog.NewService(queries, rdb)
 	reservationService := reservation.NewService(queries, db, rdb, rmq.Chan)
 
-	JWT_SECRET := "supersecret"
-	authService := auth.NewService(queries, JWT_SECRET)
-
+	// =========================================================================
+	// Handler Layer (HTTP/JSON Parsing)
+	// =========================================================================
 	authHandler := auth.NewHandler(authService)
+	catalogHandler := catalog.NewHandler(catalogService)
+	resHandler := reservation.NewHandler(reservationService)
 
-	r := chi.NewRouter()
-
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-
-	// Initialize janitor
+	// =========================================================================
+	// Background Workers
+	// =========================================================================
 	janitor := worker.NewJanitor(queries, db, rdb, rmq.Chan)
 	janitor.Start()
 
+	// =========================================================================
+	// Routing & Middleware
+	// =========================================================================
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
+	// Public Routes (No Auth Needed)
 	r.Route("/auth", func(r chi.Router) {
 		authHandler.RegisterRoutes(r)
 	})
+	r.Group(func(r chi.Router) {
+		catalogHandler.RegisterRoutes(r)
+	})
 
-	resHandler := reservation.NewHandler(reservationService)
+	// Protected Routes (Require valid JWT)
 	r.Group(func(r chi.Router) {
 		r.Use(mw.RequireAuth(JWT_SECRET))
 		resHandler.RegisterRoutes(r)
 	})
 
+	// =========================================================================
+	// Server Startup
+	// =========================================================================
 	log.Println("Sentinel API running on http://localhost:8080")
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		log.Fatalf("Server crashed: %v", err)
