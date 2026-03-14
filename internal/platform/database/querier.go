@@ -21,6 +21,8 @@ type Querier interface {
 	GetEventByID(ctx context.Context, id uuid.UUID) (GetEventByIDRow, error)
 	// Retrieves the current inventory for a given event.
 	GetInventory(ctx context.Context, eventID uuid.NullUUID) (Inventory, error)
+	// Retrieves a reservation by its ID, including event details.
+	GetReservation(ctx context.Context, id uuid.UUID) (GetReservationRow, error)
 	GetReservationStatus(ctx context.Context, id uuid.UUID) (ReservationStatus, error)
 	// Retrieves a user by their email address.
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
@@ -30,6 +32,8 @@ type Querier interface {
 	RefundPostgresInventory(ctx context.Context, eventID uuid.NullUUID) error
 	// Updates the inventory for a given event atomically.
 	UpdateInventoryAtomic(ctx context.Context, arg UpdateInventoryAtomicParams) (int64, error)
+	// Updates the status of a reservation.
+	UpdateReservationStatus(ctx context.Context, arg UpdateReservationStatusParams) error
 }
 
 var _ Querier = (*Queries)(nil)

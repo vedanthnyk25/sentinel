@@ -13,6 +13,7 @@ import (
 	"github.com/vedanthnyk25/sentinel/internal/auth"
 	"github.com/vedanthnyk25/sentinel/internal/catalog"
 	mw "github.com/vedanthnyk25/sentinel/internal/middleware"
+	"github.com/vedanthnyk25/sentinel/internal/payment"
 	"github.com/vedanthnyk25/sentinel/internal/platform/broker"
 	"github.com/vedanthnyk25/sentinel/internal/platform/database"
 	"github.com/vedanthnyk25/sentinel/internal/reservation"
@@ -25,6 +26,9 @@ func main() {
 	// =========================================================================
 	dsn := "postgres://root:secretpassword@localhost:5432/sentinel?sslmode=disable"
 	JWT_SECRET := "supersecret"
+
+	stripeSecretKey := "sk_test_12345"
+	stripeWebhookSecret := "whsec_12345"
 
 	// =========================================================================
 	// Infrastructure Layer (Databases, Caches, Brokers)
@@ -69,6 +73,7 @@ func main() {
 	authService := auth.NewService(queries, JWT_SECRET)
 	catalogService := catalog.NewService(queries, rdb)
 	reservationService := reservation.NewService(queries, db, rdb, rmq.Chan)
+	paymentService := payment.NewService(queries, stripeSecretKey, stripeWebhookSecret)
 
 	// =========================================================================
 	// Handler Layer (HTTP/JSON Parsing)
@@ -76,6 +81,7 @@ func main() {
 	authHandler := auth.NewHandler(authService)
 	catalogHandler := catalog.NewHandler(catalogService)
 	resHandler := reservation.NewHandler(reservationService)
+	paymentHandler := payment.NewHandler(paymentService)
 
 	// =========================================================================
 	// Background Workers
@@ -96,12 +102,14 @@ func main() {
 	})
 	r.Group(func(r chi.Router) {
 		catalogHandler.RegisterRoutes(r)
+		r.Post("/webhooks/stripe", paymentHandler.HandleWebhook)
 	})
 
 	// Protected Routes (Require valid JWT)
 	r.Group(func(r chi.Router) {
 		r.Use(mw.RequireAuth(JWT_SECRET))
 		resHandler.RegisterRoutes(r)
+		r.Post("/checkout", paymentHandler.HandleCreateCheckoutSession)
 	})
 
 	// =========================================================================
