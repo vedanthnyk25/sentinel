@@ -5,8 +5,12 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -95,6 +99,14 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(cors.Handler(cors.Options{
+		AllowOriginFunc: func(r *http.Request, origin string) bool {
+			return origin == "http://localhost:3000"
+		},
+		AllowedMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:     []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Idempotency-Key"},
+		AllowCredentials: true,
+	}))
 
 	// Public Routes (No Auth Needed)
 	r.Route("/auth", func(r chi.Router) {
@@ -112,11 +124,34 @@ func main() {
 		r.Post("/checkout", paymentHandler.HandleCreateCheckoutSession)
 	})
 
+	srv := &http.Server{
+		Addr:         ":8080",
+		Handler:      r,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
 	// =========================================================================
 	// Server Startup
 	// =========================================================================
-	log.Println("Sentinel API running on http://localhost:8080")
-	if err := http.ListenAndServe(":8080", r); err != nil {
-		log.Fatalf("Server crashed: %v", err)
+	go func() {
+		log.Println("Sentinel API running on http://localhost:8080")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server crashed: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt)
+	<-quit
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	log.Println("Shutting down Sentinel API...")
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Failed to gracefully shutdown: %v", err)
 	}
+
+	log.Println("Sentinel API stopped")
 }

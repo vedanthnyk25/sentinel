@@ -72,6 +72,5 @@ func (s *Service) LoginUser(ctx context.Context, email, password string) (string
 	if err != nil {
 		return "", err
 	}
-
 	return tokenString, nil
 }

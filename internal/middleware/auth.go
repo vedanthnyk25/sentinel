@@ -66,7 +66,7 @@ func RequireAuth(secretKey string) func(http.Handler) http.Handler {
 				return
 			}
 
-			// INJECT THE USER ID INTO THE CONTEXT
+			// Create a new context with the user ID
 			ctx := context.WithValue(r.Context(), UserIDKey, userID)
 
 			// Pass the request to the next handler, using the new enriched context

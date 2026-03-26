@@ -2,9 +2,10 @@ package payment
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
 	"io"
 	"net/http"
+
+	"github.com/google/uuid"
 )
 
 type Handler struct {
