@@ -28,11 +28,11 @@ func main() {
 	// =========================================================================
 	// Configuration & Secrets
 	// =========================================================================
-	dsn := "postgres://root:secretpassword@localhost:5432/sentinel?sslmode=disable"
-	JWT_SECRET := "supersecret"
+	//dsn := "postgres://root:secretpassword@localhost:5432/sentinel?sslmode=disable"
+	//JWT_SECRET := "supersecret"
 
-	stripeSecretKey := "sk_test_51SE8SGE8CY15Rz8nW1zlrL7H3KvxGy16NHT2BuBtsY9fQbLlptOmbj9ZDb5NvUHHt9vKGkxUjGpjsSm1kbeuuSwW00fuP1DQ3w"
-	stripeWebhookSecret := "whsec_03254fa980adf91b091017c341187c7899663da7858b849a88baa9e52d36652f"
+	//stripeSecretKey := "sk_test_51SE8SGE8CY15Rz8nW1zlrL7H3KvxGy16NHT2BuBtsY9fQbLlptOmbj9ZDb5NvUHHt9vKGkxUjGpjsSm1kbeuuSwW00fuP1DQ3w"
+	//stripeWebhookSecret := "whsec_03254fa980adf91b091017c341187c7899663da7858b849a88baa9e52d36652f"
 
 	// =========================================================================
 	// Infrastructure Layer (Databases, Caches, Brokers)
