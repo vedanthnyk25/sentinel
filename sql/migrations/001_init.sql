@@ -27,8 +27,8 @@ CREATE TABLE events (
 -- Inventory Table
 CREATE TABLE inventory (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_id UUID UNIQUE REFERENCES events(id) ON DELETE CASCADE, -- UNIQUE ensures 1:1 relationship
-    version INT NOT NULL DEFAULT 0,                               -- Optimistic Concurrency Control
+    event_id UUID UNIQUE REFERENCES events(id) ON DELETE CASCADE,
+    version INT NOT NULL DEFAULT 0,
     available_tickets INT NOT NULL CHECK (available_tickets >= 0) 
 );
 
@@ -55,3 +55,49 @@ CREATE TABLE idempotency_keys (
 CREATE INDEX idx_inventory_event_id ON inventory(event_id);
 CREATE INDEX idx_reservations_user_id ON reservations(user_id);
 CREATE INDEX idx_reservations_event_id ON reservations(event_id);
+
+---------------------------------------------------------
+-- DEMO DATA SEEDING
+---------------------------------------------------------
+
+-- 1. Insert Test User (email: test@sentinel.com, password: password123)
+-- Using a hardcoded UUID so it's predictable if needed later
+INSERT INTO users (id, email, password_hash) 
+VALUES (
+    '11111111-1111-1111-1111-111111111111', 
+    'test@sentinel.com', 
+    '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa' 
+);
+
+-- 2. Insert Events
+-- Using hardcoded UUIDs so we can reliably link the inventory below
+INSERT INTO events (id, name, description, date, location, price, start_time, status) 
+VALUES 
+    (
+        '22222222-2222-2222-2222-222222222222', 
+        'Coldplay Live', 
+        'Music concert featuring all the greatest hits. General admission.', 
+        '2026-12-01', 
+        'Stadium', 
+        5000.00, -- 5000 cents/paise format for the UI
+        '2026-12-01 19:30:00Z', 
+        'upcoming'
+    ),
+    (
+        '33333333-3333-3333-3333-333333333333', 
+        'Tech DevFest', 
+        'Annual developer festival with hands-on workshops and networking.', 
+        '2026-10-15', 
+        'Convention Center', 
+        2500.00, 
+        '2026-10-15 09:00:00Z', 
+        'upcoming'
+    );
+
+-- 3. Insert Inventory linked to the Events
+INSERT INTO inventory (event_id, version, available_tickets) 
+VALUES 
+    ('22222222-2222-2222-2222-222222222222', 0, 100),  -- 100 tickets for Coldplay
+    ('33333333-3333-3333-3333-333333333333', 0, 500);  -- 500 tickets for DevFest
+
+-- (Reservations and Idempotency Keys are intentionally left blank for a clean testing slate)       
