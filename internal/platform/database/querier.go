@@ -26,6 +26,8 @@ type Querier interface {
 	GetReservationStatus(ctx context.Context, id uuid.UUID) (ReservationStatus, error)
 	// Retrieves a user by their email address.
 	GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error)
+	// Retrieves all reservations for a specific user, including event details.
+	GetUserReservations(ctx context.Context, userID uuid.NullUUID) ([]GetUserReservationsRow, error)
 	// Inserts a new idempotency key for a user.
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (uuid.UUID, error)
 	MarkReservationExpired(ctx context.Context, id uuid.UUID) (int64, error)

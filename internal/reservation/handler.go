@@ -25,6 +25,7 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/reserve", h.handleReserveTicket)
+	r.Get("/my-reservations", h.handleGetUserReservations)
 }
 
 func (h *Handler) handleReserveTicket(w http.ResponseWriter, r *http.Request) {
@@ -70,4 +71,22 @@ func (h *Handler) handleReserveTicket(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(res)
+}
+
+
+func (h *Handler) handleGetUserReservations(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value(mw.UserIDKey).(uuid.UUID)
+	if !ok {
+		http.Error(w, "Invalid user_id", http.StatusBadRequest)
+		return
+	}
+
+	reservations, err := h.service.GetUserReservations(r.Context(), userID)
+	if err != nil {
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(reservations)
 }

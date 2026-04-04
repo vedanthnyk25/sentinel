@@ -48,6 +48,62 @@ func (q *Queries) GetReservation(ctx context.Context, id uuid.UUID) (GetReservat
 	return i, err
 }
 
+const getUserReservations = `-- name: GetUserReservations :many
+SELECT r.id AS reservation_id, r.status AS reservation_status, r.expires_at,
+        e.id AS event_id, e.name AS event_name,
+        e.price AS event_price,
+        e.location AS event_location,
+        e.date AS event_date
+FROM reservations r
+JOIN events e ON r.event_id = e.id
+WHERE r.user_id = $1
+ORDER BY r.created_at DESC
+`
+
+type GetUserReservationsRow struct {
+	ReservationID     uuid.UUID         `json:"reservation_id"`
+	ReservationStatus ReservationStatus `json:"reservation_status"`
+	ExpiresAt         time.Time         `json:"expires_at"`
+	EventID           uuid.UUID         `json:"event_id"`
+	EventName         string            `json:"event_name"`
+	EventPrice        string            `json:"event_price"`
+	EventLocation     string            `json:"event_location"`
+	EventDate         time.Time         `json:"event_date"`
+}
+
+// Retrieves all reservations for a specific user, including event details.
+func (q *Queries) GetUserReservations(ctx context.Context, userID uuid.NullUUID) ([]GetUserReservationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getUserReservations, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserReservationsRow
+	for rows.Next() {
+		var i GetUserReservationsRow
+		if err := rows.Scan(
+			&i.ReservationID,
+			&i.ReservationStatus,
+			&i.ExpiresAt,
+			&i.EventID,
+			&i.EventName,
+			&i.EventPrice,
+			&i.EventLocation,
+			&i.EventDate,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateReservationStatus = `-- name: UpdateReservationStatus :exec
 UPDATE reservations
 SET status = $2, updated_at = NOW()

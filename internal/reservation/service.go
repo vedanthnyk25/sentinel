@@ -146,3 +146,11 @@ func (s *Service) ReserveTicket(ctx context.Context, userId, eventId uuid.UUID, 
 	}
 	return reservation, nil
 }
+
+func (s *Service) GetUserReservations(ctx context.Context, userId uuid.UUID) ([]database.GetUserReservationsRow, error) {
+	reservations, err := s.db.GetUserReservations(ctx, uuid.NullUUID{UUID: userId, Valid: true})
+	if err != nil {
+		return nil, err
+	}
+	return reservations, nil
+}
