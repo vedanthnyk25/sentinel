@@ -73,7 +73,6 @@ func (h *Handler) handleReserveTicket(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(res)
 }
 
-
 func (h *Handler) handleGetUserReservations(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value(mw.UserIDKey).(uuid.UUID)
 	if !ok {
