@@ -91,7 +91,7 @@ func (s *Service) ReserveTicket(ctx context.Context, userId, eventId uuid.UUID, 
 	rows, err := qtx.UpdateInventoryAtomic(ctx, database.UpdateInventoryAtomicParams{
 		EventID:          uuid.NullUUID{UUID: eventId, Valid: true},
 		Version:          inventory.Version,
-		AvailableTickets: inventory.AvailableTickets - 1, // Note: we subtract $1 in SQL, so you might just pass 1 here depending on how you wrote the SQL query!
+		AvailableTickets: 1, // Note: we subtract $1 in SQL, so you might just pass 1 here depending on how you wrote the SQL query!
 	})
 	if err != nil {
 		return database.Reservation{}, err

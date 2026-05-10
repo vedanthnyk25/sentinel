@@ -112,5 +112,5 @@ func (j *Janitor) processExpiredMessage(d amqp091.Delivery) {
 		d.Nack(false, true)
 		return
 	}
-	d.Nack(false, false)
+	d.Ack(false)
 }

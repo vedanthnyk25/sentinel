@@ -66,7 +66,7 @@ INSERT INTO users (id, email, password_hash)
 VALUES (
     '11111111-1111-1111-1111-111111111111', 
     'test@sentinel.com', 
-    '$2a$10$vI8aWBnW3fID.ZQ4/zo1G.q1lRps.9cGLcZEiGDMVr5yUP1KUOYTa' 
+    '$2a$10$j5ZPuzBoy2Yz3d5fVqYeGu5CwbFxjNXH9Iec9fYZ8r8VMe3sHzElG' -- bcrypt hash for "password123"
 );
 
 -- 2. Insert Events

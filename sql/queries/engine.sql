@@ -25,3 +25,7 @@ INSERT INTO idempotency_keys (user_id, key)
 VALUES ($1, $2)
 ON CONFLICT (key) DO NOTHING
 RETURNING id;
+
+-- name: GetAllInventory :many
+SELECT event_id, available_tickets 
+FROM inventory;

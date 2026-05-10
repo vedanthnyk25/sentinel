@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -28,11 +29,11 @@ func main() {
 	// =========================================================================
 	// Configuration & Secrets
 	// =========================================================================
-	dsn := "postgres://root:secretpassword@localhost:5432/sentinel?sslmode=disable"
-	JWT_SECRET := "supersecret"
+	dsn := os.Getenv("POSTGRES_CONNECTION_STRING")
+	JWT_SECRET := os.Getenv("JWT_SECRET")
 
-	stripeSecretKey := "sk_test_51SE8SGE8CY15Rz8nW1zlrL7H3KvxGy16NHT2BuBtsY9fQbLlptOmbj9ZDb5NvUHHt9vKGkxUjGpjsSm1kbeuuSwW00fuP1DQ3w"
-	stripeWebhookSecret := "whsec_03254fa980adf91b091017c341187c7899663da7858b849a88baa9e52d36652f"
+	stripeSecretKey := os.Getenv("STRIPE_SECRET_KEY")
+	stripeWebhookSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
 
 	// =========================================================================
 	// Infrastructure Layer (Databases, Caches, Brokers)
@@ -123,6 +124,21 @@ func main() {
 		resHandler.RegisterRoutes(r)
 		r.Post("/checkout", paymentHandler.HandleCreateCheckoutSession)
 	})
+
+	// Seed Redis stock from PostgreSQL on startup
+	events, err := queries.GetAllInventory(context.Background())
+	if err != nil {
+		log.Fatalf("Failed to seed Redis stock: %v", err)
+	}
+	for _, event := range events {
+		stockKey := fmt.Sprintf("event:%s:stock", event.EventID.UUID.String())
+		err := rdb.Set(context.Background(), stockKey, event.AvailableTickets, 0).Err()
+		if err != nil {
+			log.Fatalf("Failed to seed Redis stock for event %s: %v", event.EventID.UUID, err)
+		}
+		log.Printf("Seeded Redis: event %s → %d tickets", event.EventID.UUID, event.AvailableTickets)
+	}
+	log.Println("Redis stock seeding complete")
 
 	srv := &http.Server{
 		Addr:         ":8080",
