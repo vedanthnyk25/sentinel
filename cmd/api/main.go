@@ -125,20 +125,15 @@ func main() {
 		r.Post("/checkout", paymentHandler.HandleCreateCheckoutSession)
 	})
 
-	// Seed Redis stock from PostgreSQL on startup
-	events, err := queries.GetAllInventory(context.Background())
+	err = SeedRedisInventory(
+		context.Background(),
+		queries,
+		rdb,
+	)
+
 	if err != nil {
-		log.Fatalf("Failed to seed Redis stock: %v", err)
+		log.Fatalf("Failed to seed Redis inventory: %v", err)
 	}
-	for _, event := range events {
-		stockKey := fmt.Sprintf("event:%s:stock", event.EventID.UUID.String())
-		err := rdb.Set(context.Background(), stockKey, event.AvailableTickets, 0).Err()
-		if err != nil {
-			log.Fatalf("Failed to seed Redis stock for event %s: %v", event.EventID.UUID, err)
-		}
-		log.Printf("Seeded Redis: event %s → %d tickets", event.EventID.UUID, event.AvailableTickets)
-	}
-	log.Println("Redis stock seeding complete")
 
 	srv := &http.Server{
 		Addr:         ":8080",
@@ -170,4 +165,36 @@ func main() {
 	}
 
 	log.Println("Sentinel API stopped")
+}
+
+func SeedRedisInventory(
+	ctx context.Context,
+	db *database.Queries,
+	rdb *redis.Client,
+) error {
+
+	inventory, err := db.GetAllInventory(ctx)
+	if err != nil {
+		return err
+	}
+
+	pipe := rdb.Pipeline()
+
+	for _, item := range inventory {
+		key := fmt.Sprintf(
+			"event:stock:%s",
+			item.EventID.UUID.String(),
+		)
+
+		pipe.Set(
+			ctx,
+			key,
+			item.AvailableTickets,
+			0,
+		)
+	}
+
+	_, err = pipe.Exec(ctx)
+
+	return err
 }
