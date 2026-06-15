@@ -33,6 +33,7 @@ type Querier interface {
 	InsertIdempotencyKey(ctx context.Context, arg InsertIdempotencyKeyParams) (uuid.UUID, error)
 	MarkReservationExpired(ctx context.Context, id uuid.UUID) (int64, error)
 	RefundPostgresInventory(ctx context.Context, eventID uuid.NullUUID) error
+	ResetInventory(ctx context.Context, arg ResetInventoryParams) error
 	// Updates the inventory for a given event atomically.
 	UpdateInventoryAtomic(ctx context.Context, arg UpdateInventoryAtomicParams) (int64, error)
 	// Updates the status of a reservation.

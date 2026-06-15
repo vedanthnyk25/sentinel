@@ -13,10 +13,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"github.com/vedanthnyk25/sentinel/internal/auth"
 	"github.com/vedanthnyk25/sentinel/internal/catalog"
+	"github.com/vedanthnyk25/sentinel/internal/demo"
 	mw "github.com/vedanthnyk25/sentinel/internal/middleware"
 	"github.com/vedanthnyk25/sentinel/internal/payment"
 	"github.com/vedanthnyk25/sentinel/internal/platform/broker"
@@ -29,6 +31,11 @@ func main() {
 	// =========================================================================
 	// Configuration & Secrets
 	// =========================================================================
+	err := godotenv.Load()
+	if err != nil {
+		log.Printf("No .env file found or failed to load: %v", err)
+	}
+
 	dsn := os.Getenv("POSTGRES_CONNECTION_STRING")
 	JWT_SECRET := os.Getenv("JWT_SECRET")
 
@@ -80,6 +87,8 @@ func main() {
 	reservationService := reservation.NewService(queries, db, rdb, rmq.Chan)
 	paymentService := payment.NewService(queries, stripeSecretKey, stripeWebhookSecret)
 
+	demoService := demo.NewService(reservationService)
+
 	// =========================================================================
 	// Handler Layer (HTTP/JSON Parsing)
 	// =========================================================================
@@ -87,6 +96,8 @@ func main() {
 	catalogHandler := catalog.NewHandler(catalogService)
 	resHandler := reservation.NewHandler(reservationService)
 	paymentHandler := payment.NewHandler(paymentService)
+
+	demoHandler := demo.NewHandler(demoService)
 
 	// =========================================================================
 	// Background Workers
@@ -116,6 +127,10 @@ func main() {
 	r.Group(func(r chi.Router) {
 		catalogHandler.RegisterRoutes(r)
 		r.Post("/webhooks/stripe", paymentHandler.HandleWebhook)
+	})
+
+	r.Group(func(r chi.Router) {
+		demoHandler.RegisterRoutes(r)
 	})
 
 	// Protected Routes (Require valid JWT)
@@ -181,10 +196,7 @@ func SeedRedisInventory(
 	pipe := rdb.Pipeline()
 
 	for _, item := range inventory {
-		key := fmt.Sprintf(
-			"event:stock:%s",
-			item.EventID.UUID.String(),
-		)
+		key:= fmt.Sprintf("event:%s:stock", item.EventID.UUID.String())
 
 		pipe.Set(
 			ctx,

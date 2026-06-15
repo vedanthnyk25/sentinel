@@ -78,25 +78,51 @@ func (s *Service) ReserveTicket(ctx context.Context, userId, eventId uuid.UUID, 
 
 	qtx := s.db.WithTx(tx)
 
-	inventory, err := qtx.GetInventory(ctx, uuid.NullUUID{UUID: eventId, Valid: true})
-	if err != nil {
-		return database.Reservation{}, err // Notice no manual tx.Rollback() needed!
+	const maxRetries = 3
+
+	var updated bool
+
+	for retry := 0; retry < maxRetries; retry++ {
+
+		inventory, err := qtx.GetInventory(
+			ctx,
+			uuid.NullUUID{
+				UUID:  eventId,
+				Valid: true,
+			},
+		)
+		if err != nil {
+			return database.Reservation{}, err
+		}
+
+		if inventory.AvailableTickets <= 0 {
+			return database.Reservation{}, ErrSoldOut
+		}
+
+		rows, err := qtx.UpdateInventoryAtomic(
+			ctx,
+			database.UpdateInventoryAtomicParams{
+				EventID: uuid.NullUUID{
+					UUID:  eventId,
+					Valid: true,
+				},
+				Version:          inventory.Version,
+				AvailableTickets: 1,
+			},
+		)
+		if err != nil {
+			return database.Reservation{}, err
+		}
+
+		if rows > 0 {
+			updated = true
+			break
+		}
+
+		// OCC conflict -> retry
 	}
 
-	if inventory.AvailableTickets <= 0 {
-		return database.Reservation{}, ErrSoldOut
-	}
-
-	// Atomic Update
-	rows, err := qtx.UpdateInventoryAtomic(ctx, database.UpdateInventoryAtomicParams{
-		EventID:          uuid.NullUUID{UUID: eventId, Valid: true},
-		Version:          inventory.Version,
-		AvailableTickets: 1, // Note: we subtract $1 in SQL, so you might just pass 1 here depending on how you wrote the SQL query!
-	})
-	if err != nil {
-		return database.Reservation{}, err
-	}
-	if rows == 0 {
+	if !updated {
 		return database.Reservation{}, ErrRaceCond
 	}
 
@@ -153,4 +179,46 @@ func (s *Service) GetUserReservations(ctx context.Context, userId uuid.UUID) ([]
 		return nil, err
 	}
 	return reservations, nil
+}
+
+func (s *Service) ResetInventory(
+	ctx context.Context,
+	eventID uuid.UUID,
+	tickets int32,
+) error {
+
+	err := s.db.ResetInventory(
+		ctx,
+		database.ResetInventoryParams{
+			EventID:          uuid.NullUUID{UUID: eventID, Valid: true},
+			AvailableTickets: tickets,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	stockKey := fmt.Sprintf(
+		"event:%s:stock",
+		eventID.String(),
+	)
+
+	return s.redis.Set(
+		ctx,
+		stockKey,
+		tickets,
+		0,
+	).Err()
+}
+
+func (s *Service) GetInventory(ctx context.Context, eventID uuid.UUID) (int32, error) {
+	inventory, err := s.db.GetInventory(
+		ctx,
+		uuid.NullUUID{UUID: eventID, Valid: true},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return inventory.AvailableTickets, nil
 }
