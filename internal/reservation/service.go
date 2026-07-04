@@ -78,7 +78,7 @@ func (s *Service) ReserveTicket(ctx context.Context, userId, eventId uuid.UUID, 
 
 	qtx := s.db.WithTx(tx)
 
-	const maxRetries = 3
+	const maxRetries = 1
 
 	var updated bool
 

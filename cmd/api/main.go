@@ -54,8 +54,10 @@ func main() {
 	if err := db.Ping(); err != nil {
 		log.Fatalf("Failed to ping DB: %v", err)
 	}
-	db.SetMaxOpenConns(50)
-	db.SetMaxIdleConns(50)
+	db.SetMaxOpenConns(100)
+	db.SetMaxIdleConns(100)
+	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetConnMaxIdleTime(2 * time.Minute)
 
 	// Redis
 	rdb := redis.NewClient(&redis.Options{
@@ -109,7 +111,7 @@ func main() {
 	// Routing & Middleware
 	// =========================================================================
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	//r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc: func(r *http.Request, origin string) bool {
@@ -153,8 +155,8 @@ func main() {
 	srv := &http.Server{
 		Addr:         ":8080",
 		Handler:      r,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  20 * time.Second,
+		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
@@ -196,7 +198,7 @@ func SeedRedisInventory(
 	pipe := rdb.Pipeline()
 
 	for _, item := range inventory {
-		key:= fmt.Sprintf("event:%s:stock", item.EventID.UUID.String())
+		key := fmt.Sprintf("event:%s:stock", item.EventID.UUID.String())
 
 		pipe.Set(
 			ctx,

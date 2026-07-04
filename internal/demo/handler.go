@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/containerd/log"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -19,6 +18,7 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/flash-sale", h.handleFlashSale)
+	r.Post("/reset-inventory", h.handleResetInventory)
 }
 
 type FlashSaleRequest struct {
@@ -63,7 +63,7 @@ func (h *Handler) handleFlashSale(
 		"application/json",
 	)
 
-	if err:= json.NewEncoder(w).Encode(result); err != nil {
+	if err := json.NewEncoder(w).Encode(result); err != nil {
 		http.Error(
 			w,
 			"failed to encode response",
@@ -71,4 +71,25 @@ func (h *Handler) handleFlashSale(
 		)
 		return
 	}
+}
+
+func (h *Handler) handleResetInventory(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		EventID string `json:"event_id"`
+		Tickets int32  `json:"tickets"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid body", http.StatusBadRequest)
+		return
+	}
+	eventID, err := uuid.Parse(req.EventID)
+	if err != nil {
+		http.Error(w, "invalid event id", http.StatusBadRequest)
+		return
+	}
+	if err := h.service.ResetInventory(r.Context(), eventID, req.Tickets); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }

@@ -1,7 +1,8 @@
 import http from 'k6/http';
-import { check, sleep } from 'k6';
+import { check, sleep} from 'k6';
 import { uuidv4 } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
 import { Counter, Rate, Trend } from 'k6/metrics';
+
 
 // Custom metrics for clean reporting
 const successfulReservations = new Counter('successful_reservations');
@@ -11,7 +12,7 @@ const errorResponses = new Counter('error_responses');
 const reservationDuration = new Trend('reservation_duration', true);
 
 // ── PASTE YOUR JWT TOKEN HERE ──────────────────────────────
-const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzgzOTY0MjAsInVzZXJfaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifQ.UQQaScr7zslAlHPFD0W0OdMRofQjIoW3UiUXtxACv38';
+const JWT_TOKEN = __ENV.JWT_TOKEN;
 const EVENT_ID  = '22222222-2222-2222-2222-222222222222';
 // ──────────────────────────────────────────────────────────
 

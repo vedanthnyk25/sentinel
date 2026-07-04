@@ -1,5 +1,5 @@
 import http from 'k6/http';
-import { check } from 'k6';
+import { check} from 'k6';
 import { uuidv4 } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
 import { Counter, Trend } from 'k6/metrics';
 
@@ -7,7 +7,7 @@ const serverErrors   = new Counter('server_errors');
 const expectedErrors = new Counter('expected_errors');
 const reservationDuration = new Trend('reservation_duration', true);
 
-const JWT_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzgzOTY0MjAsInVzZXJfaWQiOiIxMTExMTExMS0xMTExLTExMTEtMTExMS0xMTExMTExMTExMTEifQ.UQQaScr7zslAlHPFD0W0OdMRofQjIoW3UiUXtxACv38';
+const JWT_TOKEN = __ENV.JWT_TOKEN;
 const EVENT_ID  = '22222222-2222-2222-2222-222222222222';
 
 export const options = {
@@ -42,12 +42,13 @@ export default function () {
 
     reservationDuration.add(res.timings.duration);
 
-    if (res.status === 500) {
-        serverErrors.add(1);
-        console.error(`CRASH DETECTED: status=${res.status} body=${res.body}`);
-    } else if(res.status === 0) {
-        console.log(`REQUEST TIMEOUT: status=${res.status} body=${res.body}`);
-    } 
+    if (res.status === 500 || res.status === 0) {
+    serverErrors.add(1);
+
+    console.error(
+        `FAILED REQUEST: status=${res.status} error=${res.error} body=${res.body}`
+    );
+    }
     else if (res.status === 409 || res.status === 503) {
         expectedErrors.add(1);
     }
