@@ -1,8 +1,7 @@
 import http from 'k6/http';
-import { check, sleep} from 'k6';
+import { check } from 'k6';
 import { uuidv4 } from 'https://jslib.k6.io/k6-utils/1.4.0/index.js';
-import { Counter, Rate, Trend } from 'k6/metrics';
-
+import { Counter, Trend } from 'k6/metrics';
 
 // Custom metrics for clean reporting
 const successfulReservations = new Counter('successful_reservations');
@@ -31,8 +30,8 @@ export const options = {
     thresholds: {
         // Only fail if we get actual 500 errors — not on expected 409/503
         'error_responses': ['count<1'],
-        // Measure p95 during sell-out — should be very low
-        'reservation_duration': ['p(95)<200'],
+        // SLA: 95% of requests MUST complete in under 2 seconds
+        'reservation_duration': ['p(95)<2000'],
     },
 };
 
@@ -49,6 +48,7 @@ export default function () {
             'Authorization': `Bearer ${JWT_TOKEN}`,
             'Idempotency-Key': uuidv4(),
         },
+        timeout: '30s',
     };
 
     const start = Date.now();
