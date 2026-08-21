@@ -61,11 +61,10 @@ func main() {
 
 	// Redis
 	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr:         "localhost:6379",
+		PoolSize:     500, // Pre-warm the pool to eliminate connection bottlenecks
+		MinIdleConns: 50,
 	})
-	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		log.Fatalf("Failed to ping Redis: %v", err)
-	}
 	defer rdb.Close()
 
 	// RabbitMQ
@@ -86,7 +85,7 @@ func main() {
 	// =========================================================================
 	authService := auth.NewService(queries, JWT_SECRET)
 	catalogService := catalog.NewService(queries, rdb)
-	reservationService := reservation.NewService(queries, db, rdb, rmq.Chan)
+	reservationService := reservation.NewService(queries, rdb)
 	paymentService := payment.NewService(queries, stripeSecretKey, stripeWebhookSecret)
 
 	demoService := demo.NewService(reservationService)
@@ -106,6 +105,9 @@ func main() {
 	// =========================================================================
 	janitor := worker.NewJanitor(queries, db, rdb, rmq.Chan)
 	janitor.Start()
+
+	syncWorker := worker.NewSyncWorker(queries, db, rdb, rmq.Chan)
+	syncWorker.Start(context.Background())
 
 	// =========================================================================
 	// Routing & Middleware

@@ -12,19 +12,20 @@ import (
 )
 
 const createReservation = `-- name: CreateReservation :one
-INSERT INTO reservations (user_id, event_id, status, expires_at)
-VALUES ($1, $2, 'pending', NOW() + INTERVAL '10 minutes')
+INSERT INTO reservations (id, user_id, event_id, status, expires_at)
+VALUES ($1, $2, $3, 'pending', NOW() + INTERVAL '10 minutes')
 returning id, user_id, event_id, status, expires_at, created_at, updated_at
 `
 
 type CreateReservationParams struct {
+	ID      uuid.UUID     `json:"id"`
 	UserID  uuid.NullUUID `json:"user_id"`
 	EventID uuid.NullUUID `json:"event_id"`
 }
 
 // Creates a new reservation for a user and event.
 func (q *Queries) CreateReservation(ctx context.Context, arg CreateReservationParams) (Reservation, error) {
-	row := q.db.QueryRowContext(ctx, createReservation, arg.UserID, arg.EventID)
+	row := q.db.QueryRowContext(ctx, createReservation, arg.ID, arg.UserID, arg.EventID)
 	var i Reservation
 	err := row.Scan(
 		&i.ID,

@@ -2,174 +2,99 @@ package reservation
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
 	"github.com/vedanthnyk25/sentinel/internal/platform/database"
 )
 
 type Service struct {
 	db    *database.Queries
-	dbTx  *sql.DB
 	redis *redis.Client
-	amqp  *amqp091.Channel
 }
 
 type ReservationMessage struct {
 	ReservationID uuid.UUID `json:"reservation_id"`
 	EventID       uuid.UUID `json:"event_id"`
+	UserID        uuid.UUID `json:"user_id"`
 }
 
-func NewService(db *database.Queries, dbTx *sql.DB, redis *redis.Client, amqp *amqp091.Channel) *Service {
+func NewService(db *database.Queries, redis *redis.Client) *Service {
 	return &Service{
 		db:    db,
-		dbTx:  dbTx,
 		redis: redis,
-		amqp:  amqp,
 	}
 }
 
-func (s *Service) ReserveTicket(ctx context.Context, userId, eventId uuid.UUID, idempotencyKey string) (database.Reservation, error) {
-	// Idempotency check
-	_, err := s.db.InsertIdempotencyKey(ctx, database.InsertIdempotencyKeyParams{
-		UserID: uuid.NullUUID{UUID: userId, Valid: true},
-		Key:    idempotencyKey,
-	})
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return database.Reservation{}, ErrDuplicateRequest
-		}
-		return database.Reservation{}, err
+var reserveScript = redis.NewScript(`
+	local idempotency_key = KEYS[1]
+	local stock_key = KEYS[2]
+	local stream_key = KEYS[3]
+
+	local ttl = ARGV[1]
+	local payload = ARGV[2]
+
+	local is_new = redis.call("SETNX", idempotency_key, "1")
+	if is_new == 0 then
+		return "ErrDuplicateRequest"
+	end
+	redis.call("EXPIRE", idempotency_key, ttl)
+
+	local stock = tonumber(redis.call("GET", stock_key) or "0")
+	if stock <= 0 then
+		redis.call("DEL", idempotency_key)
+		return "ErrSoldOut"
+	end
+	redis.call("DECR", stock_key)
+
+	redis.call("XADD", stream_key, "*", "payload", payload)
+
+	return "OK"
+`)
+
+func (s *Service) ReserveTicket(ctx context.Context, eventID, userID uuid.UUID, idempotencyKey string) (database.Reservation, error) {
+
+	reservationID := uuid.New()
+
+	msg := ReservationMessage{
+		ReservationID: reservationID,
+		EventID:       eventID,
+		UserID:        userID,
 	}
 
-	stockKey := fmt.Sprintf("event:%s:stock", eventId.String())
-
-	remainingStock, err := s.redis.Decr(ctx, stockKey).Result()
+	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		return database.Reservation{}, err
+		return database.Reservation{}, fmt.Errorf("failed to marshal message: %v", err)
 	}
 
-	if remainingStock < 0 {
-		// Rollback Redis decrement
-		s.redis.Incr(ctx, stockKey)
+	stockKey := fmt.Sprintf("event:%s:stock", eventID.String())
+	idemKey := fmt.Sprintf("idempotency:%s", idempotencyKey)
+	streamKey := "reservations:stream"
+
+	result, err := reserveScript.Run(ctx, s.redis, []string{idemKey, stockKey, streamKey}, 24*60*60, string(msgBytes)).Result()
+	if err != nil {
+		return database.Reservation{}, fmt.Errorf("failed to run reserve script: %v", err)
+	}
+
+	if result == "ErrDuplicateRequest" {
+		return database.Reservation{}, ErrDuplicateRequest
+	} else if result == "ErrSoldOut" {
 		return database.Reservation{}, ErrSoldOut
+	} else if result != "OK" {
+		return database.Reservation{}, fmt.Errorf("unexpected result from reserve script: %v", result)
 	}
-
-	// Start Transaction
-	tx, err := s.dbTx.BeginTx(ctx, nil)
-	if err != nil {
-		// Rollback Redis decrement
-		s.redis.Incr(context.Background(), stockKey)
-		return database.Reservation{}, err
-	}
-
-	success := false
-	defer func() {
-		if !success {
-			tx.Rollback()
-			s.redis.Incr(context.Background(), stockKey)
-		}
-	}()
-
-	qtx := s.db.WithTx(tx)
-
-	const maxRetries = 1
-
-	var updated bool
-
-	for retry := 0; retry < maxRetries; retry++ {
-
-		inventory, err := qtx.GetInventory(
-			ctx,
-			uuid.NullUUID{
-				UUID:  eventId,
-				Valid: true,
-			},
-		)
-		if err != nil {
-			return database.Reservation{}, err
-		}
-
-		if inventory.AvailableTickets <= 0 {
-			return database.Reservation{}, ErrSoldOut
-		}
-
-		rows, err := qtx.UpdateInventoryAtomic(
-			ctx,
-			database.UpdateInventoryAtomicParams{
-				EventID: uuid.NullUUID{
-					UUID:  eventId,
-					Valid: true,
-				},
-				Version:          inventory.Version,
-				AvailableTickets: 1,
-			},
-		)
-		if err != nil {
-			return database.Reservation{}, err
-		}
-
-		if rows > 0 {
-			updated = true
-			break
-		}
-
-		// OCC conflict -> retry
-	}
-
-	if !updated {
-		return database.Reservation{}, ErrRaceCond
-	}
-
-	// Create Reservation
-	reservationRow, err := qtx.CreateReservation(ctx, database.CreateReservationParams{
-		UserID:  uuid.NullUUID{UUID: userId, Valid: true},
-		EventID: uuid.NullUUID{UUID: eventId, Valid: true},
-	})
-	if err != nil {
-		return database.Reservation{}, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return database.Reservation{}, err
-	}
-
-	success = true
-
-	reserveMessage := ReservationMessage{
-		ReservationID: reservationRow.ID,
-		EventID:       eventId,
-	}
-
-	msgBytes, err := json.Marshal(reserveMessage)
-	if err != nil {
-		fmt.Printf("Failed to marshal reservation message: %v\n", err)
-	}
-
-	err = s.amqp.PublishWithContext(ctx,
-		"",
-		"reservations.pending",
-		false,
-		false,
-		amqp091.Publishing{
-			ContentType:  "application/json",
-			DeliveryMode: amqp091.Persistent,
-			Body:         msgBytes,
-		},
-	)
 
 	reservation := database.Reservation{
-		ID:        reservationRow.ID,
-		UserID:    uuid.NullUUID{UUID: userId, Valid: true},
-		EventID:   uuid.NullUUID{UUID: eventId, Valid: true},
-		Status:    reservationRow.Status,
-		ExpiresAt: reservationRow.ExpiresAt,
+		ID:        reservationID,
+		EventID:   uuid.NullUUID{UUID: eventID, Valid: true},
+		UserID:    uuid.NullUUID{UUID: userID, Valid: true},
+		Status:    "pending",
+		ExpiresAt: time.Now().Add(10 * time.Minute),
 	}
+
 	return reservation, nil
 }
 

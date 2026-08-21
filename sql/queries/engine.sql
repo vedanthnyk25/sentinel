@@ -15,8 +15,8 @@ AND available_tickets >= $2;
 
 -- name: CreateReservation :one
 -- Creates a new reservation for a user and event.
-INSERT INTO reservations (user_id, event_id, status, expires_at)
-VALUES ($1, $2, 'pending', NOW() + INTERVAL '10 minutes')
+INSERT INTO reservations (id, user_id, event_id, status, expires_at)
+VALUES ($1, $2, $3, 'pending', NOW() + INTERVAL '10 minutes')
 returning *;
 
 -- name: InsertIdempotencyKey :one

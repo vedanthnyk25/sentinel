@@ -34,7 +34,7 @@ CREATE TABLE inventory (
 
 -- Reservations Table
 CREATE TABLE reservations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     event_id UUID REFERENCES events(id) ON DELETE CASCADE,
     status reservation_status NOT NULL DEFAULT 'pending',

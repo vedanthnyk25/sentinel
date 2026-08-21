@@ -58,8 +58,8 @@ func (s *Service) RunFlashSale(
 
 			_, err := s.reservationService.ReserveTicket(
 				ctx,
-				demoUserID,
 				eventID,
+				demoUserID,
 				uuid.NewString(),
 			)
 

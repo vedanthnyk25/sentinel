@@ -53,7 +53,7 @@ func (h *Handler) handleReserveTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := h.service.ReserveTicket(r.Context(), userID, eventID, idempotencyKey)
+	res, err := h.service.ReserveTicket(r.Context(), eventID, userID, idempotencyKey)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrDuplicateRequest):
