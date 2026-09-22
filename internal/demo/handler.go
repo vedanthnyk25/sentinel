@@ -22,8 +22,9 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 }
 
 type FlashSaleRequest struct {
-	EventID string `json:"event_id"`
-	Buyers  int    `json:"buyers"`
+	EventID      string `json:"event_id"`
+	Buyers       int    `json:"buyers"`
+	ResetTickets *int32 `json:"reset_tickets,omitempty"`
 }
 
 func (h *Handler) handleFlashSale(
@@ -47,6 +48,7 @@ func (h *Handler) handleFlashSale(
 		r.Context(),
 		req.Buyers,
 		eventID,
+		req.ResetTickets,
 	)
 
 	if err != nil {

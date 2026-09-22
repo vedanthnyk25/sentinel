@@ -61,16 +61,14 @@ CREATE INDEX idx_reservations_event_id ON reservations(event_id);
 ---------------------------------------------------------
 
 -- 1. Insert Test User (email: test@sentinel.com, password: password123)
--- Using a hardcoded UUID so it's predictable if needed later
 INSERT INTO users (id, email, password_hash) 
 VALUES (
     '11111111-1111-1111-1111-111111111111', 
     'test@sentinel.com', 
-    '$2a$10$j5ZPuzBoy2Yz3d5fVqYeGu5CwbFxjNXH9Iec9fYZ8r8VMe3sHzElG' -- bcrypt hash for "password123"
+    '$2a$10$j5ZPuzBoy2Yz3d5fVqYeGu5CwbFxjNXH9Iec9fYZ8r8VMe3sHzElG'
 );
 
 -- 2. Insert Events
--- Using hardcoded UUIDs so we can reliably link the inventory below
 INSERT INTO events (id, name, description, date, location, price, start_time, status) 
 VALUES 
     (
@@ -78,8 +76,8 @@ VALUES
         'Coldplay Live', 
         'Music concert featuring all the greatest hits. General admission.', 
         '2026-12-01', 
-        'Stadium', 
-        5000.00, -- 5000 cents/paise format for the UI
+        'Wembley Stadium, London', 
+        5000.00, 
         '2026-12-01 19:30:00Z', 
         'upcoming'
     ),
@@ -88,16 +86,80 @@ VALUES
         'Tech DevFest', 
         'Annual developer festival with hands-on workshops and networking.', 
         '2026-10-15', 
-        'Convention Center', 
+        'Convention Center, San Jose', 
         2500.00, 
         '2026-10-15 09:00:00Z', 
+        'upcoming'
+    ),
+    (
+        '44444444-4444-4444-4444-444444444444', 
+        'Taylor Swift | The Eras Tour', 
+        'Experience all eras in one unforgettable stadium performance. High demand event.', 
+        '2026-11-14', 
+        'MetLife Stadium, New Jersey', 
+        8500.00, 
+        '2026-11-14 18:30:00Z', 
+        'upcoming'
+    ),
+    (
+        '55555555-5555-5555-5555-555555555555', 
+        'FIFA World Cup Qualifiers', 
+        'High-stakes international football clash. Reserved seating and pitchside admission.', 
+        '2026-10-22', 
+        'Iconic Stadium, Lusail', 
+        6000.00, 
+        '2026-10-22 20:00:00Z', 
+        'upcoming'
+    ),
+    (
+        '66666666-6666-6666-6666-666666666666', 
+        'KubeCon + CloudNativeCon', 
+        'The premier conference for developers building distributed and scalable cloud systems.', 
+        '2026-11-05', 
+        'Moscone Center, San Francisco', 
+        12000.00, 
+        '2026-11-05 08:30:00Z', 
+        'upcoming'
+    ),
+    (
+        '77777777-7777-7777-7777-777777777777', 
+        'Formula 1 Grand Prix 2026', 
+        'Experience high-speed adrenaline from the main grandstand. 3-day weekend access.', 
+        '2026-12-12', 
+        'Silverstone Circuit, UK', 
+        15000.00, 
+        '2026-12-12 13:00:00Z', 
+        'upcoming'
+    ),
+    (
+        '88888888-8888-8888-8888-888888888888', 
+        'EDC Electronic Music Festival', 
+        'Three nights of world-renowned DJs, immersive visual stages, and carnival rides.', 
+        '2026-11-20', 
+        'Motor Speedway, Las Vegas', 
+        9500.00, 
+        '2026-11-20 17:00:00Z', 
+        'upcoming'
+    ),
+    (
+        '99999999-9999-9999-9999-999999999999', 
+        'Hans Zimmer Live in Concert', 
+        'Epic orchestral performance of iconic film scores including Interstellar and Inception.', 
+        '2026-12-18', 
+        'Royal Albert Hall, London', 
+        7000.00, 
+        '2026-12-18 19:30:00Z', 
         'upcoming'
     );
 
 -- 3. Insert Inventory linked to the Events
 INSERT INTO inventory (event_id, version, available_tickets) 
 VALUES 
-    ('22222222-2222-2222-2222-222222222222', 0, 100),  -- 100 tickets for Coldplay
-    ('33333333-3333-3333-3333-333333333333', 0, 500);  -- 500 tickets for DevFest
-
--- (Reservations and Idempotency Keys are intentionally left blank for a clean testing slate)       
+    ('22222222-2222-2222-2222-222222222222', 0, 100),
+    ('33333333-3333-3333-3333-333333333333', 0, 500),
+    ('44444444-4444-4444-4444-444444444444', 0, 200),
+    ('55555555-5555-5555-5555-555555555555', 0, 350),
+    ('66666666-6666-6666-6666-666666666666', 0, 400),
+    ('77777777-7777-7777-7777-777777777777', 0, 150),
+    ('88888888-8888-8888-8888-888888888888', 0, 300),
+    ('99999999-9999-9999-9999-999999999999', 0, 120);

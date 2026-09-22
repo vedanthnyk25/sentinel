@@ -19,15 +19,17 @@ type Service struct {
 	db                  *database.Queries
 	stripeSecretKey     string
 	stripeWebhookSecret string
+	frontendUrl         string
 }
 
-func NewService(db *database.Queries, stripeSecretKey, stripeWebhookSecret string) *Service {
+func NewService(db *database.Queries, stripeSecretKey, stripeWebhookSecret, frontendUrl string) *Service {
 	stripe.Key = stripeSecretKey
 
 	return &Service{
 		db:                  db,
 		stripeSecretKey:     stripeSecretKey,
 		stripeWebhookSecret: stripeWebhookSecret,
+		frontendUrl:         frontendUrl,
 	}
 }
 
@@ -53,7 +55,7 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, reservationID uuid.
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
 			{
 				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
-					Currency: stripe.String("usd"),
+					Currency: stripe.String("inr"),
 					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
 						Name: stripe.String(reservation.EventName),
 					},
@@ -63,8 +65,8 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, reservationID uuid.
 			},
 		},
 		Mode:       stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL: stripe.String("http://localhost:3000/success"),
-		CancelURL:  stripe.String("http://localhost:3000/cancel"),
+		SuccessURL: stripe.String(s.frontendUrl + "/success"),
+		CancelURL:  stripe.String(s.frontendUrl + "/cancel"),
 	}
 
 	sess, err := session.New(params)

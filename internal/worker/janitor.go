@@ -73,8 +73,8 @@ func (j *Janitor) processExpiredMessage(d amqp091.Delivery) {
 		return
 	}
 
-	if status == "confirmed" {
-		log.Printf("Janitor skipping reservation %s as it is already confirmed", msg.ReservationID)
+	if status != "pending" {
+		log.Printf("Janitor skipping reservation %s as it is already %s", msg.ReservationID, status)
 		d.Ack(false)
 		return
 	}

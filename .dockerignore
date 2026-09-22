@@ -1,0 +1,16 @@
+# Git
+.git
+.gitignore
+
+# Frontend dependencies and builds
+sentinel-web/node_modules
+sentinel-web/.next
+sentinel-web/out
+sentinel-web/build
+
+# Repomix, dumps, and benchmark outputs
+repomix*
+*.xml
+bench/results
+*.tar.gz
+*.pem

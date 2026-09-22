@@ -179,8 +179,13 @@ func (w *SyncWorker) handle(ctx context.Context, msg redis.XMessage) {
 	}
 
 	switch w.processMessage(ctx, reserveMsg) {
+	// handle(), success branch
 	case outcomeSuccess:
-		w.publishToJanitor(ctx, payloadStr)
+		if err := w.publishToJanitor(ctx, payloadStr); err != nil {
+			log.Printf("Reservation %s: janitor publish failed, leaving unacked for retry: %v",
+				reserveMsg.ReservationID, err)
+			return
+		}
 		w.redis.XAck(ctx, streamName, groupName, msg.ID)
 
 	case outcomeTerminal:
@@ -314,7 +319,7 @@ func isUniqueViolation(err error) bool {
 	return false
 }
 
-func (w *SyncWorker) publishToJanitor(ctx context.Context, payload string) {
+func (w *SyncWorker) publishToJanitor(ctx context.Context, payload string) error {
 	err := w.amqp.PublishWithContext(ctx,
 		"",
 		"reservations.pending",
@@ -327,6 +332,7 @@ func (w *SyncWorker) publishToJanitor(ctx context.Context, payload string) {
 		},
 	)
 	if err != nil {
-		log.Printf("Warning: Failed to hand off to RabbitMQ Janitor: %v", err)
+		return fmt.Errorf("failed to publish to janitor queue: %w", err)
 	}
+	return nil
 }

@@ -9,6 +9,10 @@ type RabbitMQ struct {
 	Chan *amqp091.Channel
 }
 
+func (r *RabbitMQ) NewChannel() (*amqp091.Channel, error) {
+	return r.Conn.Channel()
+}
+
 func NewRabbitMQ(url string) (*RabbitMQ, error) {
 	conn, err := amqp091.Dial(url)
 	if err != nil {
@@ -59,7 +63,7 @@ func NewRabbitMQ(url string) (*RabbitMQ, error) {
 	args := amqp091.Table{
 		"x-dead-letter-exchange":    "dlx.exchange",
 		"x-dead-letter-routing-key": "expired.routing.key",
-		"x-message-ttl":             600000,
+		"x-message-ttl":             int32(60000), // 1 minute
 	}
 
 	_, err = ch.QueueDeclare(

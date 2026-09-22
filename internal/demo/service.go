@@ -28,13 +28,29 @@ type FlashSaleResult struct {
 	RaceConditions     int `json:"race_conditions"`
 	Errors             int `json:"errors"`
 	InventoryRemaining int `json:"inventory_remaining"`
+	TotalTickets       int `json:"total_tickets"`
 }
 
 func (s *Service) RunFlashSale(
 	ctx context.Context,
 	requests int,
 	eventID uuid.UUID,
+	resetTickets *int32,
 ) (FlashSaleResult, error) {
+
+	var initialInventory int32
+	if resetTickets != nil && *resetTickets > 0 {
+		if err := s.ResetInventory(ctx, eventID, *resetTickets); err != nil {
+			return FlashSaleResult{}, fmt.Errorf("failed to reset inventory: %w", err)
+		}
+		initialInventory = *resetTickets
+	} else {
+		inv, err := s.reservationService.GetInventory(ctx, eventID)
+		if err != nil {
+			return FlashSaleResult{}, fmt.Errorf("failed to get inventory: %w", err)
+		}
+		initialInventory = inv
+	}
 
 	const workerCount = 1000
 
@@ -98,23 +114,23 @@ func (s *Service) RunFlashSale(
 
 	wg.Wait()
 
-	remainingInventory, _ :=
-		s.reservationService.GetInventory(
-			ctx,
-			eventID,
-		)
+	succCount := int(success.Load())
+	rem := int(initialInventory) - succCount
+	if rem < 0 {
+		rem = 0
+	}
 
 	return FlashSaleResult{
 		Buyers:             requests,
-		Success:            int(success.Load()),
+		Success:            succCount,
 		SoldOut:            int(soldOut.Load()),
 		RaceConditions:     int(race.Load()),
 		Errors:             int(errs.Load()),
-		InventoryRemaining: int(remainingInventory),
+		InventoryRemaining: rem,
+		TotalTickets:       int(initialInventory),
 	}, nil
 }
 
 func (s *Service) ResetInventory(ctx context.Context, eventID uuid.UUID, tickets int32) error {
-	err := s.reservationService.ResetInventory(ctx, eventID, tickets)
-	return err
+	return s.reservationService.ResetInventory(ctx, eventID, tickets)
 }

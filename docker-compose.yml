@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  api:
+    image: vedanthnyk25/sentinel-api:latest
+    container_name: sentinel-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+
   postgres:
     image: postgres:15-alpine
     container_name: sentinel-postgres
@@ -23,15 +36,14 @@ services:
     restart: unless-stopped
 
   rabbitmq:
-    # The 'management' tag provides a web UI to visually monitor our async queues
     image: rabbitmq:3-management-alpine
     container_name: sentinel-rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"   # AMQP protocol port (for Go to publish messages)
-      - "15672:15672" # Management UI port (Browser access)
+      - "5672:5672"
+      - "15672:15672"
     restart: unless-stopped
 
 volumes:

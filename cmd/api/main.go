@@ -60,20 +60,33 @@ func main() {
 	db.SetConnMaxIdleTime(2 * time.Minute)
 
 	// Redis
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
 	rdb := redis.NewClient(&redis.Options{
-		Addr:         "localhost:6379",
+		Addr:         redisAddr,
 		PoolSize:     500, // Pre-warm the pool to eliminate connection bottlenecks
 		MinIdleConns: 50,
 	})
 	defer rdb.Close()
 
 	// RabbitMQ
-	rmq, err := broker.NewRabbitMQ("amqp://guest:guest@localhost:5672/")
+	rabbitmqURL := os.Getenv("RABBITMQ_URL")
+	if rabbitmqURL == "" {
+		rabbitmqURL = "amqp://guest:guest@localhost:5672/"
+	}
+	rmq, err := broker.NewRabbitMQ(rabbitmqURL)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
 	}
 	defer rmq.Conn.Close()
 	defer rmq.Chan.Close()
+
+	frontendURL := os.Getenv("FRONTEND_URL")
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
 
 	// =========================================================================
 	//  Data Access Layer
@@ -86,7 +99,7 @@ func main() {
 	authService := auth.NewService(queries, JWT_SECRET)
 	catalogService := catalog.NewService(queries, rdb)
 	reservationService := reservation.NewService(queries, rdb)
-	paymentService := payment.NewService(queries, stripeSecretKey, stripeWebhookSecret)
+	paymentService := payment.NewService(queries, stripeSecretKey, stripeWebhookSecret, frontendURL)
 
 	demoService := demo.NewService(reservationService)
 
@@ -103,21 +116,30 @@ func main() {
 	// =========================================================================
 	// Background Workers
 	// =========================================================================
-	janitor := worker.NewJanitor(queries, db, rdb, rmq.Chan)
+	janitorChan, err := rmq.Conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to create channel for janitor: %v", err)
+	}
+	janitor := worker.NewJanitor(queries, db, rdb, janitorChan)
 	janitor.Start()
 
-	syncWorker := worker.NewSyncWorker(queries, db, rdb, rmq.Chan)
+	syncChan, err := rmq.Conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to create channel for sync worker: %v", err)
+	}
+	syncWorker := worker.NewSyncWorker(queries, db, rdb, syncChan)
 	syncWorker.Start(context.Background())
 
 	// =========================================================================
 	// Routing & Middleware
 	// =========================================================================
+
 	r := chi.NewRouter()
 	//r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowOriginFunc: func(r *http.Request, origin string) bool {
-			return origin == "http://localhost:3000"
+			return origin == frontendURL || origin == "http://localhost:3000"
 		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Idempotency-Key"},
